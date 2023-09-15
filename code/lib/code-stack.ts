@@ -15,12 +15,34 @@ export class CodeStack extends cdk.Stack {
     //Declare Lambda functions
     const createCarScheduleLambda = new lambda.Function(this, 'CreateCarSchedule',{
       runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromAsset("lambda"),
+      code: lambda.Code.fromAsset("lambda/create"),
       handler:"apigw-create-car-schedule.handler",
     });
 
-    const getMethod = carsApigateway.root.addResource('cars').addMethod('GET',new LambdaIntegration(createCarScheduleLambda));
+    //Declare Lambda functions
+    const readCarScheduleLambda = new lambda.Function(this, 'ReadCarSchedule',{
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset("lambda/read"),
+      handler:"apigw-read-car-schedule.handler",
+    });
 
+    //Declare Lambda functions
+    const updateCarScheduleLambda = new lambda.Function(this, 'UpdateCarSchedule',{
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset("lambda/update"),
+      handler:"apigw-update-car-schedule.handler",
+    });
 
+    //Declare Lambda functions
+    const deleteCarScheduleLambda = new lambda.Function(this, 'DeleteCarSchedule',{
+      runtime: lambda.Runtime.NODEJS_18_X,
+      code: lambda.Code.fromAsset("lambda/delete"),
+      handler:"apigw-delete-car-schedule.handler",
+    });
+
+    const carsResource = carsApigateway.root.addResource('cars');
+    const carResource = carsResource.addResource('{carId}')
+    const getCarsMethod = carsResource.addMethod('GET',new LambdaIntegration(createCarScheduleLambda));
+    const getCarMethod = carResource.addMethod('GET',new LambdaIntegration(createCarScheduleLambda));
   };
 }
