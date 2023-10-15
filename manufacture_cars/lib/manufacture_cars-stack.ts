@@ -42,7 +42,7 @@ export class ManufactureCarsStack extends Stack {
     });
 
     const carsResource = carsApigateway.root.addResource("cars");
-    const carResource = carsResource.addResource("{carId}");
+    const carResource = carsResource.addResource("{knr}");
     carsResource.addMethod("GET",new LambdaIntegration(readCarScheduleLambda));
     carResource.addMethod("GET",new LambdaIntegration(readCarScheduleLambda));
     carsResource.addMethod("POST", new LambdaIntegration(createCarScheduleLambda));
@@ -52,7 +52,6 @@ export class ManufactureCarsStack extends Stack {
     const scheduledCarsTable = new ddb.TableV2(this, "ScheduledCarsTable",{
       tableName: "ScheduledCarsTable",
       partitionKey: {name: "knr", type: ddb.AttributeType.STRING},
-      sortKey: {name: "timestamp", type: ddb.AttributeType.STRING},
     });
 
     scheduledCarsTable.grantWriteData(createCarScheduleLambda);
