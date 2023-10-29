@@ -9,6 +9,7 @@ export class ManufactureCarsStack extends Stack {
       restApiName: "ManufactureCarsRestAPI"
     });
 
+
     //Declare create cars lambda function
     const createCarScheduleLambda = new lambda.Function(this, "CreateCarSchedule",{
       functionName: "CreateCarScheduleLambda",
@@ -49,9 +50,10 @@ export class ManufactureCarsStack extends Stack {
     carResource.addMethod("PUT", new LambdaIntegration(updateCarScheduleLambda));
     carResource.addMethod("DELETE", new LambdaIntegration(deleteCarScheduleLambda));
 
+    //VIN stats knr
     const scheduledCarsTable = new ddb.TableV2(this, "ScheduledCarsTable",{
       tableName: "ScheduledCarsTable",
-      partitionKey: {name: "knr", type: ddb.AttributeType.STRING},
+      partitionKey: {name: "vin", type: ddb.AttributeType.STRING},
     });
 
     scheduledCarsTable.grantWriteData(createCarScheduleLambda);
