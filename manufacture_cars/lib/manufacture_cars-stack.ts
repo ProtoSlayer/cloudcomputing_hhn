@@ -6,6 +6,7 @@ import {
   aws_sns as sns,
   aws_sns_subscriptions as sns_sub,
   aws_iam as iam,
+  aws_ssm as ssm,
 } from "aws-cdk-lib";
 import { LambdaIntegration } from "aws-cdk-lib/aws-apigateway";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
@@ -15,6 +16,7 @@ import { Runtime } from "aws-cdk-lib/aws-lambda";
 export class ManufactureCarsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
     const carsApigateway = new apigateway.RestApi(this, "Cars", {
       restApiName: "ManufactureCarsRestAPI",
     });
@@ -34,7 +36,9 @@ export class ManufactureCarsStack extends Stack {
         displayName: "DeleteCarScheduleTopic",
       }
     );
-    const email: string = "dennis.spohrer@xl2.de"
+
+    //Add subscriptions
+    const email: string = "dennis.spohrer@xl2.de";
     createCarScheduleSnsTopic.addSubscription(
       new sns_sub.EmailSubscription(email)
     );
@@ -43,13 +47,23 @@ export class ManufactureCarsStack extends Stack {
       new sns_sub.EmailSubscription(email)
     );
 
-    const snsTopicPolicy = new iam.PolicyStatement({
-      actions: ["sns:publish"],
-      resources: [
-        createCarScheduleSnsTopic.topicArn,
-        deleteCarScheduleSnsTopic.topicName,
-      ],
-    });
+    //Define ParameterStore entries for topic arns
+    const topicArnParameterCreateCarSchedule = new ssm.StringParameter(
+      this,
+      "CreateCarScheduleTopicArnParameter",
+      {
+        parameterName: "/topics/CreateCarScheduleTopicArn",
+        stringValue: createCarScheduleSnsTopic.topicArn,
+      }
+    );
+    const topicArnParameterDeleteCarSchedule = new ssm.StringParameter(
+      this,
+      "DeleteCarScheduleTopicArnParameter",
+      {
+        parameterName: "/topics/DeleteCarScheduleTopicArn",
+        stringValue: deleteCarScheduleSnsTopic.topicArn,
+      }
+    );
 
     //Declare create cars lambda function
     const createCarScheduleLambda = new PythonFunction(
@@ -60,9 +74,6 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_create_car_schedule.py",
-        environment: {
-          SNS_TOPIC_ARN: createCarScheduleSnsTopic.topicArn,
-        },
       }
     );
 
@@ -95,46 +106,38 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_delete_car_schedule.py",
-        environment: {
-          SNS_TOPIC_ARN: deleteCarScheduleSnsTopic.topicArn,
-        },
       }
     );
-    // Allow lambda to publish messages on the SNS topics
-    createCarScheduleLambda.addToRolePolicy(snsTopicPolicy);
-    deleteCarScheduleLambda.addToRolePolicy(snsTopicPolicy);
 
-    // //Declare create cars lambda function
-    // const createCarScheduleLambda = new lambda.Function(this, "CreateCarSchedule",{
-    //   functionName: "CreateCarScheduleLambda",
-    //   runtime: lambda.Runtime.PYTHON_3_11,
-    //   code: lambda.Code.fromAsset("lambda/create"),
-    //   handler:"apigw_create_car_schedule.handler",
-    // });
+    //Allow lambda to publish to sns topic
+    const snsTopicPolicyStatement = new iam.PolicyStatement({
+      actions: ["sns:publish"],
+      resources: [
+        createCarScheduleSnsTopic.topicArn,
+        deleteCarScheduleSnsTopic.topicArn,
+      ],
+      effect: iam.Effect.ALLOW,
+    });
 
-    //Declare read lambda function
-    // const readCarScheduleLambda = new lambda.Function(this, "ReadCarSchedule",{
-    //   functionName: "ReadCarScheduleLambda",
-    //   runtime: lambda.Runtime.PYTHON_3_11,
-    //   code: lambda.Code.fromAsset("lambda/read"),
-    //   handler:"apigw_read_car_schedule.handler",
-    // });
+    //Allow lambda to get parameters from ParameterStore
+    const parameterStorePolicyStatement = new iam.PolicyStatement({
+      actions: ["ssm:GetParameter"],
+      resources: [
+        topicArnParameterCreateCarSchedule.parameterArn,
+        topicArnParameterDeleteCarSchedule.parameterArn,
+      ],
+      effect: iam.Effect.ALLOW,
+    });
 
-    // //Declare update lambda function
-    // const updateCarScheduleLambda = new lambda.Function(this, "UpdateCarSchedule",{
-    //   functionName: "UpdateCarScheduleLambda",
-    //   runtime: lambda.Runtime.PYTHON_3_11,
-    //   code: lambda.Code.fromAsset("lambda/update"),
-    //   handler:"apigw_update_car_schedule.handler",
-    // });
+    //Add statements to policy
+    const lambdaPolicy = new iam.Policy(this, "LambdaPolicy", {
+      statements: [snsTopicPolicyStatement, parameterStorePolicyStatement],
+    });
 
-    // //Declare delete lambda function
-    // const deleteCarScheduleLambda = new lambda.Function(this, "DeleteCarSchedule",{
-    //   functionName: "DeleteCarScheduleLambda",
-    //   runtime: lambda.Runtime.PYTHON_3_11,
-    //   code: lambda.Code.fromAsset("lambda/delete"),
-    //   handler:"apigw_delete_car_schedule.handler",
-    // });
+    //FIXME: Warum kann ich nicht policy.addToRolePolicy(createCarscheduleLambda.role) machen
+    // Attach policy to lambda roles
+    createCarScheduleLambda.role?.attachInlinePolicy(lambdaPolicy);
+    deleteCarScheduleLambda.role?.attachInlinePolicy(lambdaPolicy);
 
     const carsResource = carsApigateway.root.addResource("cars");
     const carResource = carsResource.addResource("{vin}");
