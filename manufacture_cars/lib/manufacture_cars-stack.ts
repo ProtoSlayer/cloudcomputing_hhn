@@ -7,6 +7,7 @@ import {
   aws_sns_subscriptions as sns_sub,
   aws_iam as iam,
   aws_ssm as ssm,
+  Duration,
 } from "aws-cdk-lib";
 import { LambdaIntegration } from "aws-cdk-lib/aws-apigateway";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
@@ -74,6 +75,7 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_create_car_schedule.py",
+        timeout: Duration.seconds(10),
       }
     );
 
@@ -83,6 +85,7 @@ export class ManufactureCarsStack extends Stack {
       entry: "lambda",
       runtime: Runtime.PYTHON_3_11,
       index: "apigw_read_car_schedule.py",
+      timeout: Duration.seconds(10)
     });
 
     //Declare update lambda function
@@ -94,6 +97,7 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_update_car_schedule.py",
+        timeout: Duration.seconds(10)
       }
     );
 
@@ -106,10 +110,11 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_delete_car_schedule.py",
+        timeout: Duration.seconds(10)
       }
     );
 
-    //Allow lambda to publish to sns topic
+    //Allow lambda to publish to sns topics
     const snsTopicPolicyStatement = new iam.PolicyStatement({
       actions: ["sns:publish"],
       resources: [
@@ -134,14 +139,12 @@ export class ManufactureCarsStack extends Stack {
       statements: [snsTopicPolicyStatement, parameterStorePolicyStatement],
     });
 
-    //FIXME: Warum kann ich nicht policy.addToRolePolicy(createCarscheduleLambda.role) machen
     // Attach policy to lambda roles
     createCarScheduleLambda.role?.attachInlinePolicy(lambdaPolicy);
     deleteCarScheduleLambda.role?.attachInlinePolicy(lambdaPolicy);
 
     const carsResource = carsApigateway.root.addResource("cars");
     const carResource = carsResource.addResource("{vin}");
-    carsResource.addMethod("GET", new LambdaIntegration(readCarScheduleLambda));
     carResource.addMethod("GET", new LambdaIntegration(readCarScheduleLambda));
     carsResource.addMethod(
       "POST",
@@ -156,7 +159,7 @@ export class ManufactureCarsStack extends Stack {
       new LambdaIntegration(deleteCarScheduleLambda)
     );
 
-    const scheduledCarsTable = new ddb.TableV2(this, "ScheduledCarsTable", {
+    const scheduledCarsTable = new ddb.Table(this, "ScheduledCarsTable", {
       tableName: "ScheduledCarsTable",
       partitionKey: { name: "vin", type: ddb.AttributeType.STRING },
     });
