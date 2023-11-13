@@ -22,7 +22,7 @@ export class ManufactureCarsStack extends Stack {
       restApiName: "ManufactureCarsRestAPI",
     });
 
-    //SNS Topics
+    // SNS Topics
     const createCarScheduleSnsTopic = new sns.Topic(
       this,
       "CreateCarScheduleTopic",
@@ -49,22 +49,15 @@ export class ManufactureCarsStack extends Stack {
     );
 
     //Define ParameterStore entries for topic arns
-    const topicArnParameterCreateCarSchedule = new ssm.StringParameter(
+    const publishToSnsTopicParameter = new ssm.StringParameter(
       this,
-      "CreateCarScheduleTopicArnParameter",
+      "PublishToSnsTopicParameter",
       {
-        parameterName: "/topics/CreateCarScheduleTopicArn",
-        stringValue: createCarScheduleSnsTopic.topicArn,
+        parameterName: "/config/publishToSns",
+        stringValue: "true",
       }
     );
-    const topicArnParameterDeleteCarSchedule = new ssm.StringParameter(
-      this,
-      "DeleteCarScheduleTopicArnParameter",
-      {
-        parameterName: "/topics/DeleteCarScheduleTopicArn",
-        stringValue: deleteCarScheduleSnsTopic.topicArn,
-      }
-    );
+
 
     //Declare create cars lambda function
     const createCarScheduleLambda = new PythonFunction(
@@ -76,6 +69,9 @@ export class ManufactureCarsStack extends Stack {
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_create_car_schedule.py",
         timeout: Duration.seconds(10),
+        environment: {
+          "SNS_TOPIC_ARN": createCarScheduleSnsTopic.topicArn
+        }
       }
     );
 
@@ -110,7 +106,10 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_delete_car_schedule.py",
-        timeout: Duration.seconds(10)
+        timeout: Duration.seconds(10),
+        environment: {
+          "SNS_TOPIC_ARN": deleteCarScheduleSnsTopic.topicArn
+        }
       }
     );
 
@@ -128,8 +127,7 @@ export class ManufactureCarsStack extends Stack {
     const parameterStorePolicyStatement = new iam.PolicyStatement({
       actions: ["ssm:GetParameter"],
       resources: [
-        topicArnParameterCreateCarSchedule.parameterArn,
-        topicArnParameterDeleteCarSchedule.parameterArn,
+        publishToSnsTopicParameter.parameterArn,
       ],
       effect: iam.Effect.ALLOW,
     });
@@ -162,6 +160,7 @@ export class ManufactureCarsStack extends Stack {
     const scheduledCarsTable = new ddb.Table(this, "ScheduledCarsTable", {
       tableName: "ScheduledCarsTable",
       partitionKey: { name: "vin", type: ddb.AttributeType.STRING },
+      deletionProtection: false
     });
 
     scheduledCarsTable.grantWriteData(createCarScheduleLambda);
