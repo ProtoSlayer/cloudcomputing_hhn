@@ -38,7 +38,7 @@ export class ManufactureCarsStack extends Stack {
       }
     );
 
-    //Add subscriptions
+    // Add subscriptions
     const email: string = "dennis.spohrer@xl2.de";
     createCarScheduleSnsTopic.addSubscription(
       new sns_sub.EmailSubscription(email)
@@ -48,16 +48,15 @@ export class ManufactureCarsStack extends Stack {
       new sns_sub.EmailSubscription(email)
     );
 
-    //Define ParameterStore entries for topic arns
+    // Define ParameterStore entries for topic arns
     const publishToSnsTopicParameter = new ssm.StringParameter(
       this,
-      "PublishToSnsTopicParameter",
+      "PublishToSnsTopicsParameter",
       {
         parameterName: "/config/publishToSns",
         stringValue: "true",
       }
     );
-
 
     //Declare create cars lambda function
     const createCarScheduleLambda = new PythonFunction(
@@ -70,8 +69,8 @@ export class ManufactureCarsStack extends Stack {
         index: "apigw_create_car_schedule.py",
         timeout: Duration.seconds(10),
         environment: {
-          "SNS_TOPIC_ARN": createCarScheduleSnsTopic.topicArn
-        }
+          SNS_TOPIC_ARN: createCarScheduleSnsTopic.topicArn,
+        },
       }
     );
 
@@ -81,7 +80,7 @@ export class ManufactureCarsStack extends Stack {
       entry: "lambda",
       runtime: Runtime.PYTHON_3_11,
       index: "apigw_read_car_schedule.py",
-      timeout: Duration.seconds(10)
+      timeout: Duration.seconds(10),
     });
 
     //Declare update lambda function
@@ -93,7 +92,7 @@ export class ManufactureCarsStack extends Stack {
         entry: "lambda",
         runtime: Runtime.PYTHON_3_11,
         index: "apigw_update_car_schedule.py",
-        timeout: Duration.seconds(10)
+        timeout: Duration.seconds(10),
       }
     );
 
@@ -108,8 +107,8 @@ export class ManufactureCarsStack extends Stack {
         index: "apigw_delete_car_schedule.py",
         timeout: Duration.seconds(10),
         environment: {
-          "SNS_TOPIC_ARN": deleteCarScheduleSnsTopic.topicArn
-        }
+          SNS_TOPIC_ARN: deleteCarScheduleSnsTopic.topicArn,
+        },
       }
     );
 
@@ -126,9 +125,7 @@ export class ManufactureCarsStack extends Stack {
     //Allow lambda to get parameters from ParameterStore
     const parameterStorePolicyStatement = new iam.PolicyStatement({
       actions: ["ssm:GetParameter"],
-      resources: [
-        publishToSnsTopicParameter.parameterArn,
-      ],
+      resources: [publishToSnsTopicParameter.parameterArn],
       effect: iam.Effect.ALLOW,
     });
 
@@ -160,7 +157,7 @@ export class ManufactureCarsStack extends Stack {
     const scheduledCarsTable = new ddb.Table(this, "ScheduledCarsTable", {
       tableName: "ScheduledCarsTable",
       partitionKey: { name: "vin", type: ddb.AttributeType.STRING },
-      deletionProtection: false
+      deletionProtection: false,
     });
 
     scheduledCarsTable.grantWriteData(createCarScheduleLambda);
