@@ -13,14 +13,32 @@ import { LambdaIntegration } from "aws-cdk-lib/aws-apigateway";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
 import { Construct } from "constructs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
+import { LogGroup } from "aws-cdk-lib/aws-logs";
 
 export class ManufactureCarsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-
+    const carsApigwLogGroup = new LogGroup(this, "ManufactureCarsAccessLogGroup");
     const carsApigateway = new apigateway.RestApi(this, "Cars", {
       restApiName: "ManufactureCarsRestAPI",
+      // AwsSolutions-APIG1
+      deployOptions:{
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        accessLogDestination: new apigateway.LogGroupLogDestination(carsApigwLogGroup),
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
+      }
     });
+
+    
+    // AwsSolutions-APIG2
+    new apigateway.RequestValidator(this, 'RequestValidator', {
+      restApi: carsApigateway,
+      // the properties below are optional
+      validateRequestBody: true,
+      validateRequestParameters: true,
+    });
+
+
 
     // SNS Topics
     const createCarScheduleSnsTopic = new sns.Topic(
