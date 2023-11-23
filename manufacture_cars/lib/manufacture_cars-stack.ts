@@ -14,31 +14,33 @@ import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
 import { Construct } from "constructs";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { LogGroup } from "aws-cdk-lib/aws-logs";
+import { NagSuppressions } from "cdk-nag";
 
 export class ManufactureCarsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-    const carsApigwLogGroup = new LogGroup(this, "ManufactureCarsAccessLogGroup");
+    const carsApigwLogGroup = new LogGroup(
+      this,
+      "ManufactureCarsAccessLogGroup"
+    );
     const carsApigateway = new apigateway.RestApi(this, "Cars", {
       restApiName: "ManufactureCarsRestAPI",
       // AwsSolutions-APIG1
-      deployOptions:{
+      deployOptions: {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        accessLogDestination: new apigateway.LogGroupLogDestination(carsApigwLogGroup),
+        accessLogDestination: new apigateway.LogGroupLogDestination(
+          carsApigwLogGroup
+        ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
-      }
+      },
     });
-
-    
     // AwsSolutions-APIG2
-    new apigateway.RequestValidator(this, 'RequestValidator', {
+    new apigateway.RequestValidator(this, "RequestValidator", {
       restApi: carsApigateway,
       // the properties below are optional
       validateRequestBody: true,
       validateRequestParameters: true,
     });
-
-
 
     // SNS Topics
     const createCarScheduleSnsTopic = new sns.Topic(
@@ -54,6 +56,21 @@ export class ManufactureCarsStack extends Stack {
       {
         displayName: "DeleteCarScheduleTopic",
       }
+    );
+
+    //Enable TLS and server-side encryption
+    NagSuppressions.addResourceSuppressions(
+      [createCarScheduleSnsTopic, deleteCarScheduleSnsTopic],
+      [
+        {
+          id: "AwsSolutions-SNS2",
+          reason: "No sensitive data is transmitted",
+        },
+        {
+          id: "AwsSolutions-SNS3",
+          reason: "No sensitive data is transmitted",
+        },
+      ]
     );
 
     // Add subscriptions
@@ -158,16 +175,19 @@ export class ManufactureCarsStack extends Stack {
 
     const carsResource = carsApigateway.root.addResource("cars");
     const carResource = carsResource.addResource("{vin}");
-    carResource.addMethod("GET", new LambdaIntegration(readCarScheduleLambda));
-    carsResource.addMethod(
+    const getMethod = carResource.addMethod(
+      "GET",
+      new LambdaIntegration(readCarScheduleLambda)
+    );
+    const postMethod = carsResource.addMethod(
       "POST",
       new LambdaIntegration(createCarScheduleLambda)
     );
-    carResource.addMethod(
+    const putMethod = carResource.addMethod(
       "PUT",
       new LambdaIntegration(updateCarScheduleLambda)
     );
-    carResource.addMethod(
+    const deleteMethod = carResource.addMethod(
       "DELETE",
       new LambdaIntegration(deleteCarScheduleLambda)
     );
@@ -182,5 +202,27 @@ export class ManufactureCarsStack extends Stack {
     scheduledCarsTable.grantReadData(readCarScheduleLambda);
     scheduledCarsTable.grantWriteData(updateCarScheduleLambda);
     scheduledCarsTable.grantWriteData(deleteCarScheduleLambda);
+
+    // Authorization with Cognito and APIGateway authorizers
+    NagSuppressions.addResourceSuppressions(
+      [getMethod, postMethod, putMethod, deleteMethod],
+      [
+        {
+          id: "AwsSolutions-COG4",
+          reason: "Not needed in this example",
+        },
+        {
+          id: "AwsSolutions-APIG4",
+          reason: "Not needed in this example",
+        },
+      ]
+    );
+    //Managed LambdaBasicExecutionRole
+    NagSuppressions.addStackSuppressions(this, [
+      {
+        id: "AwsSolutions-IAM4",
+        reason: "Not needed.",
+      },
+    ]);
   }
 }
